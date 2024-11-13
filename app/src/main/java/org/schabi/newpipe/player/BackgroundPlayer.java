@@ -32,7 +32,7 @@ import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.IBinder;
-import android.preference.PreferenceManager;
+import androidx.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -50,6 +50,7 @@ import com.google.android.exoplayer2.source.MediaSource;
 import com.nostra13.universalimageloader.core.assist.FailReason;
 
 import org.schabi.newpipe.BuildConfig;
+import org.schabi.newpipe.App;
 import org.schabi.newpipe.R;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.player.event.PlayerEventListener;
@@ -70,19 +71,19 @@ import static org.schabi.newpipe.util.Localization.assureCorrectAppLanguage;
  */
 public final class BackgroundPlayer extends Service {
     public static final String ACTION_CLOSE
-            = "org.schabi.newpipe.player.BackgroundPlayer.CLOSE";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.CLOSE";
     public static final String ACTION_PLAY_PAUSE
-            = "org.schabi.newpipe.player.BackgroundPlayer.PLAY_PAUSE";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.PLAY_PAUSE";
     public static final String ACTION_REPEAT
-            = "org.schabi.newpipe.player.BackgroundPlayer.REPEAT";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.REPEAT";
     public static final String ACTION_PLAY_NEXT
-            = "org.schabi.newpipe.player.BackgroundPlayer.ACTION_PLAY_NEXT";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.ACTION_PLAY_NEXT";
     public static final String ACTION_PLAY_PREVIOUS
-            = "org.schabi.newpipe.player.BackgroundPlayer.ACTION_PLAY_PREVIOUS";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.ACTION_PLAY_PREVIOUS";
     public static final String ACTION_FAST_REWIND
-            = "org.schabi.newpipe.player.BackgroundPlayer.ACTION_FAST_REWIND";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.ACTION_FAST_REWIND";
     public static final String ACTION_FAST_FORWARD
-            = "org.schabi.newpipe.player.BackgroundPlayer.ACTION_FAST_FORWARD";
+            = App.PACKAGE_NAME + ".player.BackgroundPlayer.ACTION_FAST_FORWARD";
 
     public static final String SET_IMAGE_RESOURCE_METHOD = "setImageResource";
     private static final String TAG = "BackgroundPlayer";

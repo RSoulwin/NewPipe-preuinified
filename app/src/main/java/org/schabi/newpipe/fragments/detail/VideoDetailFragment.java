@@ -8,8 +8,8 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
-import android.text.Html;
+import androidx.preference.PreferenceManager;
+import androidx.core.text.HtmlCompat;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.util.Linkify;
@@ -53,6 +53,7 @@ import org.schabi.newpipe.download.DownloadDialog;
 import org.schabi.newpipe.extractor.InfoItem;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.exceptions.ContentNotSupportedException;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor;
 import org.schabi.newpipe.extractor.stream.AudioStream;
@@ -191,7 +192,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
     private AppBarLayout appBarLayout;
     private ViewPager viewPager;
-    private TabAdaptor pageAdapter;
+    private TabAdapter pageAdapter;
     private TabLayout tabLayout;
     private FrameLayout relatedStreamsLayout;
 
@@ -252,7 +253,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
         if (currentWorker != null) {
             currentWorker.dispose();
         }
-        PreferenceManager.getDefaultSharedPreferences(getContext())
+        PreferenceManager.getDefaultSharedPreferences(requireContext())
                 .edit()
                 .putString(getString(R.string.stream_info_selected_tab_key),
                         pageAdapter.getItemTitle(viewPager.getCurrentItem()))
@@ -329,7 +330,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
             case ReCaptchaActivity.RECAPTCHA_REQUEST:
                 if (resultCode == Activity.RESULT_OK) {
                     NavigationHelper
-                            .openVideoDetailFragment(getFragmentManager(), serviceId, url, name);
+                            .openVideoDetailFragment(getFM(), serviceId, url, name);
                 } else {
                     Log.e(TAG, "ReCaptcha failed");
                 }
@@ -410,9 +411,9 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
                 openPopupPlayer(false);
                 break;
             case R.id.detail_controls_playlist_append:
-                if (getFragmentManager() != null && currentInfo != null) {
+                if (getFM() != null && currentInfo != null) {
                     PlaylistAppendDialog.fromStreamInfo(currentInfo)
-                            .show(getFragmentManager(), TAG);
+                            .show(getFM(), TAG);
                 }
                 break;
             case R.id.detail_controls_download:
@@ -451,11 +452,8 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
     private void openChannel(final String subChannelUrl, final String subChannelName) {
         try {
-            NavigationHelper.openChannelFragment(
-                    getFragmentManager(),
-                    currentInfo.getServiceId(),
-                    subChannelUrl,
-                    subChannelName);
+            NavigationHelper.openChannelFragment(getFM(), currentInfo.getServiceId(),
+                    subChannelUrl, subChannelName);
         } catch (Exception e) {
             ErrorActivity.reportUiError((AppCompatActivity) getActivity(), e);
         }
@@ -468,6 +466,9 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
         }
 
         switch (v.getId()) {
+            case R.id.detail_controls_playlist_append:
+                NavigationHelper.openBookmarksFragment(getFM());
+                break;
             case R.id.detail_controls_background:
                 openBackgroundPlayer(true);
                 break;
@@ -486,7 +487,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
                 }
                 break;
             case R.id.detail_title_root_layout:
-                ShareUtils.copyToClipboard(getContext(), videoTitleTextView.getText().toString());
+                ShareUtils.copyToClipboard(requireContext(), videoTitleTextView.getText().toString());
                 break;
         }
 
@@ -557,7 +558,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
         appBarLayout = rootView.findViewById(R.id.appbarlayout);
         viewPager = rootView.findViewById(R.id.viewpager);
-        pageAdapter = new TabAdaptor(getChildFragmentManager());
+        pageAdapter = new TabAdapter(getChildFragmentManager());
         viewPager.setAdapter(pageAdapter);
         tabLayout = rootView.findViewById(R.id.tablayout);
         tabLayout.setupWithViewPager(viewPager);
@@ -568,7 +569,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
         thumbnailBackgroundButton.requestFocus();
 
-        if (AndroidTvUtils.isTv(getContext())) {
+        if (AndroidTvUtils.isTv(requireContext())) {
             // remove ripple effects from detail controls
             final int transparent = getResources().getColor(R.color.transparent_background_color);
             detailControlsAddToPlaylist.setBackgroundColor(transparent);
@@ -591,6 +592,7 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
         detailControlsBackground.setOnClickListener(this);
         detailControlsPopup.setOnClickListener(this);
         detailControlsAddToPlaylist.setOnClickListener(this);
+		detailControlsAddToPlaylist.setOnLongClickListener(this);
         detailControlsDownload.setOnClickListener(this);
         detailControlsDownload.setOnLongClickListener(this);
 
@@ -693,6 +695,18 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
                 if (currentInfo != null) {
                     ShareUtils.shareUrl(requireContext(), currentInfo.getName(),
                             currentInfo.getOriginalUrl());
+                }
+                return true;
+            case R.id.menu_item_share_stream:
+                if (currentInfo != null) {
+                    final Stream stream;
+                    if (currentInfo.getVideoStreams().isEmpty()
+                            && currentInfo.getVideoOnlyStreams().isEmpty()) {
+                        stream = getDefaultAudioStream();
+                    } else {
+                        stream = getSelectedVideoStream();
+                    }
+                    ShareUtils.shareUrl(requireContext(), currentInfo.getName(), stream.getUrl());
                 }
                 return true;
             case R.id.menu_item_openInBrowser:
@@ -928,10 +942,10 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
     //////////////////////////////////////////////////////////////////////////*/
 
     private void openBackgroundPlayer(final boolean append) {
-        AudioStream audioStream = currentInfo.getAudioStreams()
-                .get(ListHelper.getDefaultAudioFormat(activity, currentInfo.getAudioStreams()));
+        final AudioStream audioStream = getDefaultAudioStream();
 
-        boolean useExternalAudioPlayer = PreferenceManager.getDefaultSharedPreferences(activity)
+        final boolean useExternalAudioPlayer = PreferenceManager
+                .getDefaultSharedPreferences(activity)
                 .getBoolean(activity.getString(R.string.use_external_audio_player_key), false);
 
         if (!useExternalAudioPlayer && android.os.Build.VERSION.SDK_INT >= 16) {
@@ -1015,6 +1029,20 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
         return sortedVideoStreams != null ? sortedVideoStreams.get(selectedVideoStreamIndex) : null;
     }
 
+    /**
+     * Get the stream to play when the current stream is an audio-only stream.
+     *
+     * This is the audio-only equivalent of getSelectedVideoStream,
+     * without the ability for the user to select a custom stream quality.
+     *
+     * @return AudioStream instance according to user settings
+     */
+    private AudioStream getDefaultAudioStream() {
+        final List<AudioStream> audioStreams = currentInfo.getAudioStreams();
+        final int streamIndex = ListHelper.getDefaultAudioFormat(activity, audioStreams);
+        return audioStreams.get(streamIndex);
+    }
+
     private void prepareDescription(final Description description) {
         if (description == null || TextUtils.isEmpty(description.getContent())
                 || description == Description.EMPTY_DESCRIPTION) {
@@ -1023,24 +1051,17 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
         if (description.getType() == Description.HTML) {
             disposables.add(Single.just(description.getContent())
-                    .map((@NonNull String descriptionText) -> {
-                        Spanned parsedDescription;
-                        if (Build.VERSION.SDK_INT >= 24) {
-                            parsedDescription = Html.fromHtml(descriptionText, 0);
-                        } else {
-                            //noinspection deprecation
-                            parsedDescription = Html.fromHtml(descriptionText);
-                        }
-                        return parsedDescription;
-                    })
+                    .map((@NonNull final String descriptionText) ->
+                            HtmlCompat.fromHtml(descriptionText,
+                                    HtmlCompat.FROM_HTML_MODE_LEGACY))
                     .subscribeOn(Schedulers.computation())
                     .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe((@NonNull Spanned spanned) -> {
+                    .subscribe((@NonNull final Spanned spanned) -> {
                         videoDescriptionView.setText(spanned);
                         videoDescriptionView.setVisibility(View.VISIBLE);
                     }));
         } else if (description.getType() == Description.MARKDOWN) {
-            final Markwon markwon = Markwon.builder(getContext())
+            final Markwon markwon = Markwon.builder(requireContext())
                     .usePlugin(LinkifyPlugin.create())
                     .build();
             markwon.setMarkdown(videoDescriptionView, description.getContent());
@@ -1066,6 +1087,11 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
 
     private void showContent() {
         contentRootLayoutHiding.setVisibility(View.VISIBLE);
+        final boolean showDescriptionOnLoad = PreferenceManager.getDefaultSharedPreferences(activity)
+                .getBoolean(getString(R.string.always_expand_description_key), false);
+        if (showDescriptionOnLoad) {
+            toggleTitleAndDescription();
+        }
     }
 
     protected void setInitialData(final int sid, final String u, final String title) {
@@ -1261,32 +1287,34 @@ public class VideoDetailFragment extends BaseStateFragment<StreamInfo>
         setTitleToUrl(info.getServiceId(), info.getOriginalUrl(), info.getName());
 
         if (!info.getErrors().isEmpty()) {
-            showSnackBarError(info.getErrors(),
-                    UserAction.REQUESTED_STREAM,
-                    CompatibilityUtil.getNameOfService(info.getServiceId()),
-                    info.getUrl(),
-                    0);
+            // Bandcamp fan pages are not yet supported and thus a ContentNotAvailableException is
+            // thrown. This is not an error and thus should not be shown to the user.
+            for (final Throwable throwable : info.getErrors()) {
+                if (throwable instanceof ContentNotSupportedException
+                        && "Fan pages are not supported".equals(throwable.getMessage())) {
+                    info.getErrors().remove(throwable);
+                }
+            }
+
+            if (!info.getErrors().isEmpty()) {
+                showSnackBarError(info.getErrors(),
+                        UserAction.REQUESTED_STREAM,
+                        CompatibilityUtil.getNameOfService(info.getServiceId()),
+                        info.getUrl(),
+                        0);
+            }
         }
 
-        switch (info.getStreamType()) {
-            case LIVE_STREAM:
-            case AUDIO_LIVE_STREAM:
-                detailControlsDownload.setVisibility(View.GONE);
-                spinnerToolbar.setVisibility(View.GONE);
-                break;
-            default:
-                if (info.getAudioStreams().isEmpty()) {
-                    detailControlsBackground.setVisibility(View.GONE);
-                }
-                if (!info.getVideoStreams().isEmpty() || !info.getVideoOnlyStreams().isEmpty()) {
-                    break;
-                }
+        detailControlsDownload.setVisibility(info.getStreamType() == StreamType.LIVE_STREAM
+                || info.getStreamType() == StreamType.AUDIO_LIVE_STREAM ? View.GONE : View.VISIBLE);
+        detailControlsBackground.setVisibility(info.getAudioStreams().isEmpty()
+                ? View.GONE : View.VISIBLE);
 
-                detailControlsPopup.setVisibility(View.GONE);
-                spinnerToolbar.setVisibility(View.GONE);
-                thumbnailPlayButton.setImageResource(R.drawable.ic_headset_shadow);
-                break;
-        }
+        final boolean noVideoStreams =
+                info.getVideoStreams().isEmpty() && info.getVideoOnlyStreams().isEmpty();
+        detailControlsPopup.setVisibility(noVideoStreams ? View.GONE : View.VISIBLE);
+        thumbnailPlayButton.setImageResource(
+                noVideoStreams ? R.drawable.ic_headset_shadow : R.drawable.ic_play_arrow_shadow);
 
         if (autoPlayEnabled) {
             openVideoPlayer();

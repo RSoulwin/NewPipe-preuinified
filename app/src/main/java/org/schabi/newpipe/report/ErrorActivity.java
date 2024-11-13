@@ -407,9 +407,8 @@ public class ErrorActivity extends AppCompatActivity {
                 .append("\n* __Content Language:__ ").append(getContentLanguageString())
                 .append("\n* __App Language:__ ").append(getAppLanguage())
                 .append("\n* __Service:__ ").append(errorInfo.getServiceName())
-                    .append("\n* __Version:__ ").append(BuildConfig.VERSION_NAME)
-                    .append("\n* __OS:__ ").append(getOsString()).append("\n");
-
+                .append("\n* __Version:__ ").append(BuildConfig.VERSION_NAME)
+                .append("\n* __OS:__ ").append(getOsString()).append("\n");
 
             // Collapse all logs to a single paragraph when there are more than one
             // to keep the GitHub issue clean.
